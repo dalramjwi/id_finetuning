@@ -9,6 +9,11 @@ data_file_path = os.path.join(os.path.dirname(__file__), 'data/story_form.json')
 # 데이터셋 로드
 dataset = load_dataset('json', data_files=data_file_path)
 
+# 데이터셋을 학습용(train)과 평가용(validation)으로 나누기
+split_dataset = dataset['train'].train_test_split(test_size=0.2)
+train_dataset = split_dataset['train']
+eval_dataset = split_dataset['test']
+
 # 모델과 토크나이저 로드
 model_name = "meta-llama/Llama-3.2-3B-Instruct"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -25,7 +30,8 @@ def preprocess_function(examples):
     return inputs
 
 # 데이터셋에 전처리 적용
-tokenized_datasets = dataset.map(preprocess_function, batched=True)
+tokenized_train_dataset = train_dataset.map(preprocess_function, batched=True)
+tokenized_eval_dataset = eval_dataset.map(preprocess_function, batched=True)
 
 # GPU 사용 여부 확인
 if torch.cuda.is_available():
@@ -54,7 +60,8 @@ training_args = TrainingArguments(
 trainer = Trainer(
     model=model,
     args=training_args,
-    train_dataset=tokenized_datasets['train']
+    train_dataset=tokenized_train_dataset,  # 학습 데이터셋
+    eval_dataset=tokenized_eval_dataset     # 평가 데이터셋
 )
 
 # 모델 파인튜닝 시작
@@ -78,7 +85,7 @@ def test_model():
 
 # 데이터셋 확인 로그
 print("===== 데이터셋 확인 =====")
-print(tokenized_datasets['train'])
+print(tokenized_train_dataset)
 
 # 학습이 완료된 후 테스트 실행
 if __name__ == "__main__":
