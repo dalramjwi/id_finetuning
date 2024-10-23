@@ -1,5 +1,6 @@
 import os
 import logging
+import matplotlib.pyplot as plt 
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
 from datasets import load_dataset
 import torch
@@ -60,7 +61,10 @@ logging.info("데이터 전처리 함수 정의 완료")
 tokenized_datasets = dataset.map(preprocess_function, batched=True)
 logging.info("데이터셋에 전처리 적용 완료")
 
-# 10. 학습 설정
+# 10. 손실값을 기록하기 위한 리스트 초기화
+loss_values = []
+
+# 11. 학습 설정
 training_args = TrainingArguments(
     output_dir="./results",            
     per_device_train_batch_size=1,     
@@ -75,27 +79,46 @@ training_args = TrainingArguments(
 )
 logging.info("학습 설정 완료")
 
-# 11. 트레이너 설정
+# 12. 트레이너 설정
 trainer = Trainer(
     model=model,
     args=training_args,
     train_dataset=tokenized_datasets['train'],  # 모든 데이터셋을 학습에 사용
-    eval_dataset=None  # 검증 데이터셋은 사용하지 않음
+    eval_dataset=None,
 )
+
 logging.info("트레이너 설정 완료")
 
-# 12. 모델 파인튜닝 반복 실행
+# 13. 모델 파인튜닝 반복 실행
 if latest_version is not None:
     logging.info(f"{latest_model_path}에 파인튜닝을 이어서 수행합니다.")
 else:
     logging.info(f"새 모델을 학습합니다.")
 
-for i in range(50):
+# 14. 학습 후 손실값을 저장하고, 각 학습 후 손실값을 기록
+for i in range(10):
     logging.info(f"===== {i+1}번째 학습 시작 =====")
-    trainer.train()
-    logging.info(f"===== {i+1}번째 학습 완료 =====")
+    result = trainer.train()  # 학습을 실행하고 손실값을 반환
+    loss_values.append(result.training_loss)  # 학습 중 손실값 저장
+    logging.info(f"===== {i+1}번째 학습 완료, 손실값: {result.training_loss} =====")
 
-# 13. 학습된 모델 저장 (새 버전으로 저장)
+# 15. 손실값을 시각화하는 함수
+def save_loss_plot(loss_values, save_path):
+    plt.figure(figsize=(10, 6))
+    plt.plot(loss_values, label="Training Loss")
+    plt.xlabel("Iteration")
+    plt.ylabel("Loss")
+    plt.title("Training Loss Over Time")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(save_path)
+    logging.info(f"손실값 그래프 {save_path}에 저장 완료")
+
+# 16. 손실값 그래프 저장 경로 설정 및 저장
+loss_plot_path = os.path.join(model_folder, f"loss_plot_v{new_version}.png")
+save_loss_plot(loss_values, loss_plot_path)
+
+# 17. 학습된 모델 저장 (새 버전으로 저장)
 new_model_path = f"{model_folder}/fine_tuned_model_v{new_version}"
 model.save_pretrained(new_model_path)
 tokenizer.save_pretrained(new_model_path)
